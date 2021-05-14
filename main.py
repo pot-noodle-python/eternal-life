@@ -30,6 +30,7 @@ class Database:
         for item in list_of_hashes:
             self.values[str(item[0])] = str(item[1])
         
+        self.prev_values = self.values.copy()
         print(f"loaded google sheet information")
     
     def save(self):
@@ -48,11 +49,16 @@ class Database:
             print(f"Save failed. No change detected in values.")
 
     def save_count(self, id, increment=1):
+        print("-------------------------------")
+
         print(f"updating user {id} locally")
         if self.values.get(str(id)):
             prayers_before = int(self.values[str(id)])
+            print(f"prayers before: {prayers_before}")
             self.values[str(id)] = str(int(self.values[str(id)]) + increment)
             prayers_after = int(self.values[str(id)])
+            print(f"prayers after: {prayers_after}")
+            print("-------------------------------")
         else:
             prayers_before = 0
             self.values[str(id)] = "1"
@@ -97,9 +103,22 @@ bot.lowercase_count = {}
 bot.protect_count = {}
 
 async def upgrade(result, message, user):
+    guild = bot.get_guild(807218043566555157)
+    user = guild.get_member(user.id)
+
+    print("-------------------------------")
+    print("upgrade called")
+    print(f"result: {result}")
+    print(f"result type: {type(result)}")
+    print(f"message: {message.content}")
+    print(f"message type: {type(message)}")
+    print(f"user: {user.display_name}")
+    print(f"user type: {type(user)}")
+    print("-------------------------------")
+
     priest_role = discord.utils.find(lambda r: r.name == 'Priest', message.guild.roles)
     bishop_role = discord.utils.find(lambda r: r.name == 'Bishop', message.guild.roles)
-    archbishop_role = discord.utils.find(lambda r: r.name == 'Archbishop Of The Church Of Humraj', message.guild.roles)
+    archbishop_role = discord.utils.find(lambda r: r.name == 'Archbishop', message.guild.roles)
     
     if result == 1 and priest_role not in user.roles:
         await user.add_roles(get(user.guild.roles, name="Priest"))
@@ -108,7 +127,7 @@ async def upgrade(result, message, user):
         await user.add_roles(get(user.guild.roles, name="Bishop"))
         await message.reply(f"**{user.mention} HAS NOW ASCENDED INTO A BISHOP BY PRAISING MASTER HUMRAJ 600 TIMES.**")
     elif result == 3 and archbishop_role not in user.roles:
-        await user.add_roles(get(user.guild.roles, name="Archbishop Of The Church Of Humraj"))
+        await user.add_roles(get(user.guild.roles, name="Archbishop"))
         await message.reply(f"**{user.mention} HAS NOW ASCENDED INTO AN ARCHBISHOP BY PRAISING MASTER HUMRAJ 1200 TIMES.**")
 
 async def time_save():
@@ -173,14 +192,20 @@ async def on_message(message):
 @bot.command()
 async def help(ctx):
     embedVar = discord.Embed(title="Command List", description="""
+    **DEFAULT COMMANDS:**\n\n\n
     **?count** - see how many times you have praised master Humraj\n\n
     **?total** - see how many times we have praised master Humraj, collectively\n\n
-    **?bless <user mention/ID>** - if you know, you know\n\n
+    **?leaderboard** - return a leaderboard of prayers.\n\n
+    **PRIEST COMMANDS:**\n\n\n
+    **?bless <user mention/ID>** - bless someone with a random amount of prayers\n\n
+    **BISHOP COMMANDS:**\n\n\n
     **?protect <user mention/ID>** protect people from sins\n\n
+    **ARCHBISHOP COMMANDS:**\n\n\n
     **?baptize <user mention/ID>** - shower someone in holy water\n\n
+    **SINNER COMMANDS:**\n\n\n
     **?steal <user mention/ID>** - commit some sins to perform this action...\n\n
+    **DEVIL COMMANDS:**\n\n\n
     **?pickpocket <user mention/ID>** - theres no going back once you can do this...\n\n
-    **?leaderboard** - return a leaderboard of prayers.
     """, color=0x00ff00)
 
     await ctx.send(embed=embedVar)
@@ -212,12 +237,28 @@ async def remove_prayers(ctx, count, user: User):
     await ctx.reply(f"removed {count} prayers from {user.id}")
 
 @bot.command()
+@commands.has_role('Archbishop')
+@commands.cooldown(1, 2700, commands.BucketType.user)
+async def baptize(ctx, user: User):
+
+    if user == ctx.message.author:
+        await ctx.message.reply("**Master Humraj** says you can't baptize yourself, unfortunately")
+        baptize.reset_cooldown(ctx)
+        return
+    
+    prayers = random.randint(100, 200)
+    await ctx.message.reply(f"{user.mention} has been baptized and has earned **{prayers}** prayers")
+    result = database.save_count(user.id, increment=prayers)
+    await upgrade(result, ctx.message, user)
+
+@bot.command()
 @commands.has_role('Bishop')
 @commands.cooldown(1, 1200, commands.BucketType.user)
 async def protect(ctx, user: User):
 
     if user == ctx.message.author:
         await ctx.message.reply("**Master Humraj** says you can't protect yourself, that's something a **devil** would do.")
+        protect.reset_cooldown(ctx)
         return
     
     bot.protect_count[str(user.id)] = random.randint(5, 10)
@@ -311,8 +352,10 @@ async def total(ctx):
 @commands.has_role('Priest')
 @commands.cooldown(1, bot.bless_cooldown, commands.BucketType.user)
 async def bless(ctx, user: User):
+
     if user == ctx.message.author:
         await ctx.message.reply("**Master Humraj** says you can't bless yourself, that's unholy.")
+        bless.reset_cooldown(ctx)
         return
     
     prayers = random.randint(10, 50)
@@ -327,6 +370,13 @@ async def bless_error(ctx, error):
         await ctx.message.reply(f"**Master Humraj** says you have to wait **{error.retry_after:.2f}**s before you bless someone again")
     if isinstance(error, commands.CheckFailure):
         await ctx.message.reply(f"**Master Humraj** says you have to praise him more before you can become a **Priest** and bless someone. **Get to work.**")
+
+@baptize.error
+async def baptize_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.message.reply(f"**Master Humraj** says you have to wait **{error.retry_after:.2f}**s before you baptize someone again")
+    if isinstance(error, commands.CheckFailure):
+        await ctx.message.reply(f"**Master Humraj** says you have to praise him more before you can become an **Archbishop** and bless someone. **Get to work.**")
 
 @total.error
 async def total_error(ctx, error):
@@ -364,5 +414,5 @@ async def protect_error(ctx, error):
     if isinstance(error, commands.CheckFailure):
         await ctx.message.reply(f"**Master Humraj** says you're not holy enough to be protecting people. **Pray more peasant!**")
 
-
-bot.run('ODQwMjU1MTE2OTYyODI0MjUy.YJVijw.O8GfshvfH9ZASX8AvDTSvfEuCXw')
+t = open("token.txt")
+bot.run(t.read())
