@@ -107,7 +107,7 @@ async def upgrade(result, message, user):
     user = guild.get_member(user.id)
 
     print("-------------------------------")
-    print("upgrade called")
+    print("upgrade called.")
     print(f"result: {result}")
     print(f"result type: {type(result)}")
     print(f"message: {message.content}")
